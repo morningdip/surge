@@ -1,0 +1,28 @@
+#!name=Remove ADs
+#!desc=狙殺大部分常見的廣告 v20200507.01
+#!system=mac
+
+[Rule]
+DOMAIN-KEYWORD,aotter,REJECT
+DOMAIN-KEYWORD,app-measurement,REJECT
+DOMAIN-KEYWORD,adsage,REJECT
+DOMAIN-KEYWORD,adsrvmedia,REJECT
+DOMAIN-KEYWORD,adwords,REJECT
+DOMAIN-KEYWORD,admarvel,REJECT
+DOMAIN-KEYWORD,admaster,REJECT
+DOMAIN-KEYWORD,adsystem,REJECT
+DOMAIN-KEYWORD,appsflyer,REJECT
+DOMAIN-KEYWORD,adservice,REJECT-DROP
+DOMAIN-KEYWORD,analytics,REJECT
+DOMAIN-KEYWORD,crashlytics,REJECT
+DOMAIN-KEYWORD,doubleclick,REJECT
+DOMAIN-KEYWORD,inmobi,REJECT
+DOMAIN-KEYWORD,meetrics,REJECT
+DOMAIN-KEYWORD,supersonicads,REJECT
+DOMAIN,itad.linetv.tw,REJECT
+DOMAIN,sessions.bugsnag.com,REJECT
+DOMAIN-SUFFIX,admob.com,REJECT
+DOMAIN-SUFFIX,mopub.com,REJECT
+DOMAIN-SUFFIX,openx.com,REJECT
+DOMAIN-SUFFIX,flurry.com,REJECT
+DOMAIN-SET,https://raw.githubusercontent.com/jkgtw/Surge/master/ADLists/AD.list,REJECT
