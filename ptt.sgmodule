@@ -1,5 +1,5 @@
-#!name=PTT 跳過年齡驗證
-#!desc=比舊版簡潔快速，需開啟 Rewrite。
+#!name=PTT 18
+#!desc=Rewrite。
 #!system=mac
 
 [Header Rewrite]
