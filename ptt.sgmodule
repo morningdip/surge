@@ -1,9 +1,0 @@
-#!name=PTT 18
-#!desc=Rewrite。
-#!system=mac
-
-[Header Rewrite]
-^https://www.ptt.cc header-add Cookie over18=1
-
-[MITM]
-hostname = %APPEND% www.ptt.cc
