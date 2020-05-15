@@ -1,6 +1,5 @@
 #!name=Remove ADs
 #!desc=狙殺大部分常見的廣告 v20200507.01
-#!system=mac
 
 [Rule]
 DOMAIN-KEYWORD,aotter,REJECT
