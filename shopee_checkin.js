@@ -1,3 +1,11 @@
+/*
+[Script]
+cron "0 6 * * *" script-path=shopee_checkin.js
+http-request ^https:\/\/shopee\.tw\/me\/setting max-size=0,script-path=shopee_getcookie.js
+[MITM]
+hostname = shopee.tw
+*/
+
 var shopeeUrl = {
     url: 'https://shopee.tw/mkt/coins/api/v2/checkin',
     headers: {
