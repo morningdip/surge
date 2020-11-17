@@ -1,8 +1,0 @@
-#!name=Shopee Cookie
-#!desc=取得蝦皮 Cookie
-
-[Script]
-http-request ^https://shopee\.tw/me/setting script-path=http://
-
-[MITM]
-hostname = shopee.tw
