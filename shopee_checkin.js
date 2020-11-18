@@ -23,7 +23,7 @@ $httpClient.post(shopeeUrl, function(error, response, data) {
             if (obj["data"]["success"]) {
                 var user = obj["data"]["username"];
                 var coins = obj["data"]["increase_coins"];
-                $notification.post("Shopee Daily Check-In", "", "You have earned " + coins + "Shopee Coins.");
+                $notification.post("Shopee Daily Check-In", "", "You have earned " + coins + " Shopee Coins.");
                 $done();
             }
         } else {
