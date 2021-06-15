@@ -1,7 +1,7 @@
 /*
 [Script]
 cron "0 7 * * *" script-path=https://raw.githubusercontent.com/morningdip/surge/master/shopee_checkin.js
-shopee-cookie.js = type=http-request,pattern=^https:\/\/shopee\.tw\/me\/setting,script-path=https://raw.githubusercontent.com/morningdip/surge/master/shopee_getcookie.js,script-update-interval=-1
+shopee_getcookie.js = type=http-request,pattern=^https:\/\/shopee\.tw\/me\/setting,script-path=https://raw.githubusercontent.com/morningdip/surge/master/shopee_getcookie.js,script-update-interval=-1
 [MITM]
 hostname = shopee.tw
 */
