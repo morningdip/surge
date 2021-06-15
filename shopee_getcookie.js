@@ -1,8 +1,8 @@
 /*
 [Script]
-shopee_getcookie.js= type=http-request,pattern=^https:\/\/shopee\.tw\/me\/setting,script-path=https://raw.githubusercontent.com/morningdip/surge/master/shopee_getcookie.js,script-update-interval=-1
+shopee_getcookie.js = type=http-request,pattern=^https:\/\/shopee\.tw\/me\/setting,script-path=https://raw.githubusercontent.com/morningdip/surge/master/shopee_getcookie.js,script-update-interval=-1
 [MITM]
-hostname= shopee.tw
+hostname = shopee.tw
 */
 
 if ($request.headers['Cookie']) {
