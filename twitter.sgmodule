@@ -1,0 +1,6 @@
+#!name=Twitter Image DNS
+#!desc=Speedup the Image Loading on Twitter.
+
+[Host]
+pbs.twimg.com = 151.101.188.159
+abs.twimg.com = 151.101.188.159
