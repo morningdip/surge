@@ -1,5 +1,5 @@
 #!name=neoHosts
-#!desc=Remove ads based on neohosts
+#!desc=Remove Advertisements Based on neoHosts.
 
 [Rule]
 DOMAIN,itad.linetv.tw,REJECT
