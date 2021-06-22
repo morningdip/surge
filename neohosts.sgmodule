@@ -1,5 +1,5 @@
 #!name=neoHosts
-#!desc=Blocking either ads or just unwanted host addresses.
+#!desc=Block Advertisements.
 
 [Rule]
 DOMAIN,itad.linetv.tw,REJECT
