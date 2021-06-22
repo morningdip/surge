@@ -1,5 +1,5 @@
-#!name=Auto Shopee Checkin
-#!desc=每天早上七點自動簽到 v20210211
+#!name=Shopee
+#!desc=Automated check-in for shopee coins
 
 [Script]
 cron "0 7 * * *" script-path=https://raw.githubusercontent.com/morningdip/surge/master/shopee_checkin.js
