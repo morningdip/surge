@@ -1,5 +1,5 @@
 #!name=Facebook
-#!desc=Block Facebook SDK
+#!desc=Block Facebook SDK.
 #!system=ios
 
 [Rule]
