@@ -1,5 +1,5 @@
 #!name=YouTube
-#!desc=YouTube videos removes ads.
+#!desc=Remove YouTube Advertisement.
 
 [Rule]
 URL-REGEX,https?:\/\/.+.googlevideo.com\/ptracking\?pltype=adhost,REJECT
