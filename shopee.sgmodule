@@ -1,5 +1,5 @@
 #!name=Shopee
-#!desc=Automated check-in for shopee coins
+#!desc=Automated Check-in for Shopee Coins.
 
 [Script]
 cron "0 7 * * *" script-path=https://raw.githubusercontent.com/morningdip/surge/master/shopee_checkin.js
