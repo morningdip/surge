@@ -3,4 +3,4 @@
 #!system=ios
 
 [Rule]
-AND,((NOT,((USER-AGENT,*FBAN/FBIOS;*))), (NOT,((USER-AGENT,*FBAN/FBPageAdmin;*))), (NOT,((USER-AGENT,*FBAN/MessengerLiteForiOS;*))), (DOMAIN,graph.facebook.com)),REJECT
+AND,((NOT,((USER-AGENT,*FBAN/FBIOS;*))), (NOT,((USER-AGENT,*FBAN/FBPageAdmin;*))), (NOT,((USER-AGENT,*FBAN/MessengerLiteForiOS;*))), (NOT,((USER-AGENT,Instagram*))), (DOMAIN,graph.facebook.com)),REJECT
