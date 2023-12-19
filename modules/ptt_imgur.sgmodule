@@ -1,0 +1,10 @@
+#!name=PTT 圖床模組
+#!desc=修正 PTT 網頁版無法顯示圖片問題
+
+[Header Rewrite]
+^https://imgur.com header-del Referer
+^https://m.imgur.com header-del Referer
+^https://i.imgur.com header-del Referer
+
+[MITM]
+hostname = %APPEND% imgur.com, m.imgur.com, i.imgur.com

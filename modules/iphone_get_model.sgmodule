@@ -1,0 +1,8 @@
+#!name=iPhone Model Number
+#!desc=Get iPhone Model Number from Apple Store.
+
+[Script]
+iphone_get_model.js = type=http-request,pattern=^https:\/\/www\.apple\.com\/tw\/shop\/buy-iphone\/,script-path=https://raw.githubusercontent.com/morningdip/surge/master/scripts/iphone_get_model.js,script-update-interval=-1
+
+[MITM]
+hostname = %APPEND% www.apple.com

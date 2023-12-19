@@ -1,0 +1,6 @@
+#!name=推特圖片模組
+#!desc=加速推特圖片載入速度
+
+[Host]
+pbs.twimg.com = 146.75.112.159
+abs.twimg.com = 146.75.112.159

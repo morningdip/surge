@@ -1,0 +1,8 @@
+#!name=蘋果軟體更新模組
+#!desc=防止蘋果軟體自動更新
+
+[Rule]
+USER-AGENT,MobileAsset*,DIRECT
+DOMAIN,mesu.apple.com,REJECT
+DOMAIN,gdmf.apple.com,REJECT
+DOMAIN,updates-http.cdn-apple.com,REJECT

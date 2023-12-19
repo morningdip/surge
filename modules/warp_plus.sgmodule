@@ -1,0 +1,5 @@
+#!name=WARP+ 規則集模組
+#!desc=當請求符合規則集時應用代理策略
+
+[Rule]
+RULE-SET,https://raw.githubusercontent.com/morningdip/surge/master/rules/telegram.list,WARP+

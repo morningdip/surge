@@ -1,0 +1,6 @@
+#!name=TINYGIF 規則集模組
+#!desc=當請求符合規則集時回傳極小的 GIF
+#!system=ios
+
+[Rule]
+RULE-SET,https://raw.githubusercontent.com/morningdip/surge/master/rules/app.list,REJECT-TINYGIF
