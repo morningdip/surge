@@ -3,7 +3,7 @@
 
 [Script]
 nccc_3d = type=http-response, pattern=^https:\/\/webauthen\.nccc\.com\.tw\/acsn2_kernel\/2\/browser\/challenge-otp$, script-path=https://raw.githubusercontent.com/morningdip/surge/master/scripts/nccc.js, requires-body=true
-cathay_3d = type=http-response, pattern=^https:\/\/3ds\.cathaybk\.com\.tw\/(.*), script-path=https://raw.githubusercontent.com/morningdip/surge/master/scripts/nccc.js, requires-body=true
+cathay_3d = type=http-response, pattern=^https:\/\/3ds\.cathaybk\.com\.tw\/(.*), script-path=https://raw.githubusercontent.com/morningdip/surge/main/scripts/cathay_3d.js, requires-body=true
 
 [MITM]
 hostname = %APPEND% webauthen.nccc.com.tw, 3ds.cathaybk.com.tw
