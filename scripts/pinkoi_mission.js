@@ -77,44 +77,47 @@ function achieveMission(mission) {
     }
 
     if (missionKey === 'add_fav_item') {
-        let payload = {
-            ...payloadHeaders,
-            body: {
-                tid: 'sdpgB9qS'
-            },
-            url: 'https://www.pinkoi.com/apiv2/item/fav'
-        }
-        $httpClient.post(payload, function (error, response, data) {
-            if (error) {
-                $notification.post('Pinkoi 任務失敗', '', '連線錯誤');
-                $done()
-            } else {
-                if (response.status == 200) {
-                    payload.url = 'https://www.pinkoi.com/apiv2/item/unfav'
-                    $httpClient.post(payload, function (error, response, data) {
-                        if (error) {
-                            $notification.post('Pinkoi 任務失敗', '', '連線錯誤')
-                            $done()
-                        } else {
-                            if (response.status == 200) {
-                                return
-                            } else {
-                                $notification.post(
-                                    'Pinkoi Cookie 已過期',
-                                    '',
-                                    '請重新登入'
-                                )
-                                $done()
-                            }
-                        }
-                    })
-                    return
-                } else {
-                    $notification.post('Pinkoi Cookie 已過期', '', '請重新登入')
-                    $done()
-                }
+        const item_ids = ['6k5tF2uK', 'zDzEKiTR', 'YRcUicek']
+        for (const item_id of item_ids) {
+            let payload = {
+                ...payloadHeaders,
+                body: {
+                    tid: item_id
+                },
+                url: 'https://www.pinkoi.com/apiv2/item/fav'
             }
-        })
+            $httpClient.post(payload, function (error, response, data) {
+                if (error) {
+                    $notification.post('Pinkoi 任務失敗', '', '連線錯誤');
+                    $done()
+                } else {
+                    if (response.status == 200) {
+                        payload.url = 'https://www.pinkoi.com/apiv2/item/unfav'
+                        $httpClient.post(payload, function (error, response, data) {
+                            if (error) {
+                                $notification.post('Pinkoi 任務失敗', '', '連線錯誤')
+                                $done()
+                            } else {
+                                if (response.status == 200) {
+                                    return
+                                } else {
+                                    $notification.post(
+                                        'Pinkoi Cookie 已過期',
+                                        '',
+                                        '請重新登入'
+                                    )
+                                    $done()
+                                }
+                            }
+                        })
+                        return
+                    } else {
+                        $notification.post('Pinkoi Cookie 已過期', '', '請重新登入')
+                        $done()
+                    }
+                }
+            })
+        }
     }
 
     if (missionKey === 'add_to_favlist') {
