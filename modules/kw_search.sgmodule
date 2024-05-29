@@ -39,7 +39,7 @@
 ^https:\/\/duckduckgo.com\/\?q=dmm\+([^&]+).+ https://www.dmm.co.jp/monthly/premium/-/list/search/=/?searchstr=$1 302
 
 # gg: Google
-^https:\/\/duckduckgo.com\/\?q=gg\+([^&]+).+ https://www.google.com/search?&safe=off&q=$1 302
+^https:\/\/duckduckgo.com\/\?q=gg\+([^&]+).+ https://www.google.com/search?&safe=off&udm=14&q=$1 302
 
 # default: Kagi
 ^https:\/\/duckduckgo.com\/\?q=([^&]+).+ https://kagi.com/search?q=$1 302
