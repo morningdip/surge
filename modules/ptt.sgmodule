@@ -3,6 +3,9 @@
 
 [Header Rewrite]
 ^https://www.ptt.cc header-add Cookie over18=1
+^https://www.ptt.cc header-add cookie over18=1
+^https://ptt.cc header-add Cookie over18=1
+^https://ptt.cc header-add cookie over18=1
 
 [MITM]
 hostname = %APPEND% www.ptt.cc
