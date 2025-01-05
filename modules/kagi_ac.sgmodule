@@ -1,0 +1,9 @@
+#!name=關鍵字自動完成模組
+#!desc=根據網址列關鍵字自動生成關鍵詞
+#!arguments=session_link
+
+[Script]
+[Kagi] 搜尋自動完成 = type=http-response, pattern=^https://duckduckgo\.com\/ac\/\?q=.*, requires-body=1, script-path=https://raw.githubusercontent.com/morningdip/surge/refs/heads/main/scripts/kagi_ac.js, argument={{{session_link}}}
+
+[MITM]
+hostname = %APPEND% duckduckgo.com, kagi.com
