@@ -2,7 +2,7 @@
 #!desc=修正 PTT 網頁版無法顯示圖片問題
 
 [Script]
-imgur_fix = type=http-response, pattern=^https:\/\/www\.ptt\.cc\/bbs\/(.*), script-path=https://raw.githubusercontent.com/gslin/imgur-links-rewriting-on-ptt/refs/heads/master/imgur-links-rewriting-on-ptt.user.js, requires-body=true
+imgur_fix = type=http-response, pattern=^https:\/\/www\.ptt\.cc\/bbs\/(.*), script-path=https://raw.githubusercontent.com/morningdip/surge/refs/heads/main/scripts/imgur-links-rewriting-on-ptt.user.js, requires-body=true
 
 [MITM]
 hostname = %APPEND% www.ptt.cc
