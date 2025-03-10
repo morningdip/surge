@@ -1,10 +1,8 @@
 #!name=PTT 圖床模組
 #!desc=修正 PTT 網頁版無法顯示圖片問題
 
-[Header Rewrite]
-^https://imgur.com header-del Referer
-^https://m.imgur.com header-del Referer
-^https://i.imgur.com header-del Referer
+[Script]
+http-response ^https://www\.ptt\.cc/bbs/.+ ,script-path=https://raw.githubusercontent.com/morningdip/surge/refs/heads/main/scripts/imgur-links-rewriting-on-ptt.user.js, requires-body=true
 
 [MITM]
-hostname = %APPEND% imgur.com, m.imgur.com, i.imgur.com
+hostname = %APPEND% www.ptt.cc
