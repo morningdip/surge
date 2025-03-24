@@ -2,7 +2,7 @@
 #!desc=自動跳過 PTT 年齡認證網頁
 
 [Header Rewrite]
-^https://www.ptt.cc header-add Cookie over18=1
+http-response ^https://www.ptt.cc header-add set-cookie over18=1
 
 [MITM]
 hostname = %APPEND% www.ptt.cc
