@@ -2,7 +2,7 @@
 #!desc=修正 PTT 網頁版無法顯示圖片問題
 
 [Script]
-type=http-response, pattern=^https://www.ptt.cc/bbs/.*, requires-body=true, script-path=https://raw.githubusercontent.com/morningdip/surge/refs/heads/main/scripts/ptt_imgur_fix.js
+type=http-response,pattern=^https://www.ptt.cc/bbs/.*,requires-body=true,script-path=https://raw.githubusercontent.com/morningdip/surge/refs/heads/main/scripts/ptt_imgur_fix.js
 
 [MITM]
 hostname = %APPEND% ptt.cc, www.ptt.cc
