@@ -4,7 +4,7 @@
 #!arguments=帳號,密碼,TOTP:null
 
 [Script]
-1min-daily-login = type=cron,cronexp=10 16 * * *,wake-system=1,timeout=30,script-path=https://raw.githubusercontent.com/morningdip/surge/refs/heads/main/scripts/1min.js,argument=email={{{帳號}}}&password={{{密碼}}}&totp={{{TOTP}}}
+1min-daily-login = type=cron,cronexp=0 7 * * *,wake-system=1,timeout=30,script-path=https://raw.githubusercontent.com/morningdip/surge/refs/heads/main/scripts/1min.js,argument=email={{{帳號}}}&password={{{密碼}}}&totp={{{TOTP}}}
 
 [MITM]
 hostname = %APPEND% api.1min.ai
