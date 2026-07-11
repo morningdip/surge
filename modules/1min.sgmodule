@@ -1,10 +1,8 @@
-#!name=1min.ai 自動登入
-#!desc=每日自動登入 1min.ai
-
+#!name=1min.ai 自動簽到
+#!desc=每日自動登入 1min.ai 並領取簽到獎勵
+#!category=簽到
 #!arguments=帳號,密碼,TOTP:null
+#!arguments-desc=帳號: 1min.ai 登入 email\n密碼: 登入密碼\nTOTP: MFA 金鑰（未啟用 MFA 請保持 null）
 
 [Script]
-1min-daily-login = type=cron,cronexp=30 16 * * *,wake-system=1,timeout=30,script-path=https://raw.githubusercontent.com/morningdip/surge/refs/heads/main/scripts/1min.js,argument=email={{{帳號}}}&password={{{密碼}}}&totp={{{TOTP}}}
-
-[MITM]
-hostname = %APPEND% api.1min.ai
+1min-daily-login = type=cron,cronexp=30 16 * * *,wake-system=1,timeout=60,script-path=https://raw.githubusercontent.com/morningdip/surge/refs/heads/main/scripts/1min.js,argument=email={{{帳號}}}&password={{{密碼}}}&totp={{{TOTP}}}
