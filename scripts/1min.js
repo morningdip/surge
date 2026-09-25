@@ -7,8 +7,10 @@
  *   email    - 1min.ai 登入信箱
  *   password - 登入密碼
  *   totp     - MFA 金鑰（未啟用 MFA 填 null 或留空）
+ *   jitter   - 隨機延遲上限（分鐘），避免每天固定同一時間執行，0 或留空則不延遲
  *
  * 流程：
+ *   0. 隨機延遲 0 ~ jitter 分鐘
  *   1. 讀取快取 JWT（先本地檢查過期時間，再以 credits API 驗證）
  *   2. 無效則以帳密登入（必要時以內建 TOTP 完成 MFA 驗證）
  *   3. 呼叫 notifications API 觸發每日簽到獎勵
@@ -274,6 +276,15 @@ function formatNumber(num) {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// 隨機延遲 0 ~ maxMinutes 分鐘，讓每日執行時間有誤差
+async function randomDelay(maxMinutes) {
+    const minutes = Number(maxMinutes);
+    if (!(minutes > 0)) return;
+    const ms = Math.floor(Math.random() * minutes * 60000);
+    console.log(`⏳ 隨機延遲 ${Math.round(ms / 1000)} 秒後開始`);
+    await sleep(ms);
+}
+
 // ===== HTTP 標頭 =====
 const BROWSER_HEADERS = {
     'Content-Type': 'application/json',
@@ -478,6 +489,8 @@ async function checkIn(session) {
     if (!email || !password) {
         throw new Error('缺少 email 或 password 參數，請檢查模組設定');
     }
+
+    await randomDelay(args.jitter);
 
     const store = createSessionStore(email);
     const session = await getSession(
