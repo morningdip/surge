@@ -1,506 +1,204 @@
 /**
  * 1min.ai 每日自動簽到
  *
- * 支援 Surge / Loon / Stash / Quantumult X（cron 定時任務腳本，無需 MITM）
+ * 僅支援 Surge（需 MITM api.1min.ai）
+ *
+ * 1min.ai 登入需要驗證碼，腳本不走帳密登入流程，改為：
+ *   - http-request 模式：從經過 Surge 的瀏覽器（app.1min.ai）請求中擷取 token 與 team ID
+ *   - cron 模式：讀取已擷取的 token 觸發每日簽到獎勵；token 效期 7 天，
+ *     剩不到 2 天時，有填密碼則以「重設為同一組密碼」換發新 token（會讓瀏覽器端登出），
+ *     沒填密碼則提醒需重新用瀏覽器登入
  *
  * 參數（argument）：
- *   email    - 1min.ai 登入信箱
- *   password - 登入密碼
- *   totp     - MFA 金鑰（未啟用 MFA 填 null 或留空）
- *   jitter   - 隨機延遲上限（分鐘），避免每天固定同一時間執行，0 或留空則不延遲
- *
- * 流程：
- *   0. 隨機延遲 0 ~ jitter 分鐘
- *   1. 讀取快取 JWT（先本地檢查過期時間，再以 credits API 驗證）
- *   2. 無效則以帳密登入（必要時以內建 TOTP 完成 MFA 驗證）
- *   3. 呼叫 notifications API 觸發每日簽到獎勵
- *   4. 查詢最終點數並發送通知
+ *   password - 選填，用於到期前自動換發 token，不使用請保持 null 或留空
  */
 
-const API_BASE = 'https://api.1min.ai';
-const NOTIFY_TITLE = '1min.ai 簽到';
-const REQUEST_TIMEOUT_MS = 10000;
-const BONUS_WAIT_MS = 3000;
-// JWT 剩餘有效期低於此值視為過期，避免流程中途失效
-const JWT_EXPIRY_MARGIN_MS = 60000;
-
-// ===== 環境抽象層（Surge / Loon / Stash 用 $httpClient，Quantumult X 用 $task）=====
-const $ = (() => {
-    const isQX = typeof $task !== 'undefined';
-
-    const request = (method, { url, headers, body }) =>
-        new Promise((resolve, reject) => {
-            let settled = false;
-            const finish = (fn, value) => {
-                if (settled) return;
-                settled = true;
-                clearTimeout(timer);
-                fn(value);
-            };
-            const timer = setTimeout(
-                () => finish(reject, new Error(`請求逾時: ${url}`)),
-                REQUEST_TIMEOUT_MS
-            );
-
-            if (isQX) {
-                $task.fetch({ url, method: method.toUpperCase(), headers, body }).then(
-                    (resp) => finish(resolve, { status: resp.statusCode, body: resp.body }),
-                    (err) => finish(reject, new Error((err && err.error) || '網路錯誤'))
-                );
-            } else {
-                $httpClient[method]({ url, headers, body }, (error, response, data) => {
-                    if (error) {
-                        finish(reject, new Error(String(error)));
-                    } else {
-                        finish(resolve, {
-                            status: response.status || response.statusCode,
-                            body: data,
-                        });
-                    }
-                });
-            }
-        });
-
-    return {
-        argument: typeof $argument === 'string' ? $argument : '',
-        get: (options) => request('get', options),
-        post: (options) => request('post', options),
-        storeRead: (key) => (isQX ? $prefs.valueForKey(key) : $persistentStore.read(key)),
-        storeWrite: (value, key) =>
-            isQX ? $prefs.setValueForKey(value, key) : $persistentStore.write(value, key),
-        storeRemove: (key) =>
-            isQX ? $prefs.removeValueForKey(key) : $persistentStore.write(null, key),
-        notify: (subtitle, message) =>
-            isQX
-                ? $notify(NOTIFY_TITLE, subtitle, message)
-                : $notification.post(NOTIFY_TITLE, subtitle, message),
-        done: () => $done(),
-    };
-})();
-
-// ===== 內建 TOTP（RFC 6238，base32 + HMAC-SHA1，零外部依賴）=====
-const TOTP = (() => {
-    const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-
-    function base32Decode(input) {
-        const clean = input.toUpperCase().replace(/[\s=-]/g, '');
-        const bytes = [];
-        let buffer = 0;
-        let bits = 0;
-        for (const char of clean) {
-            const index = BASE32_ALPHABET.indexOf(char);
-            if (index === -1) throw new Error(`TOTP 金鑰含無效字元: ${char}`);
-            buffer = (buffer << 5) | index;
-            bits += 5;
-            if (bits >= 8) {
-                bits -= 8;
-                bytes.push((buffer >>> bits) & 0xff);
-            }
-        }
-        return bytes;
-    }
-
-    const rotl = (n, b) => ((n << b) | (n >>> (32 - b))) >>> 0;
-
-    function sha1(bytes) {
-        let h0 = 0x67452301;
-        let h1 = 0xefcdab89;
-        let h2 = 0x98badcfe;
-        let h3 = 0x10325476;
-        let h4 = 0xc3d2e1f0;
-
-        const bitLength = bytes.length * 8;
-        const msg = bytes.slice();
-        msg.push(0x80);
-        while (msg.length % 64 !== 56) msg.push(0);
-        for (let i = 7; i >= 0; i--) msg.push(Math.floor(bitLength / 2 ** (8 * i)) & 0xff);
-
-        for (let offset = 0; offset < msg.length; offset += 64) {
-            const w = new Array(80);
-            for (let i = 0; i < 16; i++) {
-                w[i] =
-                    (msg[offset + 4 * i] << 24) |
-                    (msg[offset + 4 * i + 1] << 16) |
-                    (msg[offset + 4 * i + 2] << 8) |
-                    msg[offset + 4 * i + 3];
-            }
-            for (let i = 16; i < 80; i++) {
-                w[i] = rotl(w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16], 1);
-            }
-
-            let a = h0;
-            let b = h1;
-            let c = h2;
-            let d = h3;
-            let e = h4;
-            for (let i = 0; i < 80; i++) {
-                let f;
-                let k;
-                if (i < 20) {
-                    f = (b & c) | (~b & d);
-                    k = 0x5a827999;
-                } else if (i < 40) {
-                    f = b ^ c ^ d;
-                    k = 0x6ed9eba1;
-                } else if (i < 60) {
-                    f = (b & c) | (b & d) | (c & d);
-                    k = 0x8f1bbcdc;
-                } else {
-                    f = b ^ c ^ d;
-                    k = 0xca62c1d6;
-                }
-                const temp = (rotl(a, 5) + (f >>> 0) + e + k + (w[i] >>> 0)) >>> 0;
-                e = d;
-                d = c;
-                c = rotl(b, 30);
-                b = a;
-                a = temp;
-            }
-            h0 = (h0 + a) >>> 0;
-            h1 = (h1 + b) >>> 0;
-            h2 = (h2 + c) >>> 0;
-            h3 = (h3 + d) >>> 0;
-            h4 = (h4 + e) >>> 0;
-        }
-
-        const out = [];
-        for (const h of [h0, h1, h2, h3, h4]) {
-            out.push((h >>> 24) & 0xff, (h >>> 16) & 0xff, (h >>> 8) & 0xff, h & 0xff);
-        }
-        return out;
-    }
-
-    function hmacSha1(key, message) {
-        const normalizedKey = key.length > 64 ? sha1(key) : key;
-        const ipad = new Array(64);
-        const opad = new Array(64);
-        for (let i = 0; i < 64; i++) {
-            const k = normalizedKey[i] || 0;
-            ipad[i] = k ^ 0x36;
-            opad[i] = k ^ 0x5c;
-        }
-        return sha1(opad.concat(sha1(ipad.concat(message))));
-    }
-
-    function generate(secret, options) {
-        const { period = 30, digits = 6, timestamp = Date.now() } = options || {};
-        const key = base32Decode(secret);
-        let counter = Math.floor(timestamp / 1000 / period);
-        const message = new Array(8);
-        for (let i = 7; i >= 0; i--) {
-            message[i] = counter & 0xff;
-            counter = Math.floor(counter / 256);
-        }
-        const digest = hmacSha1(key, message);
-        const offset = digest[19] & 0x0f;
-        const code =
-            (digest[offset] & 0x7f) * 16777216 +
-            digest[offset + 1] * 65536 +
-            digest[offset + 2] * 256 +
-            digest[offset + 3];
-        return String(code % 10 ** digits).padStart(digits, '0');
-    }
-
-    return { generate };
-})();
-
-// ===== 工具函式 =====
-function parseArguments(raw) {
-    const args = {};
-    for (const pair of raw.split('&')) {
-        const eq = pair.indexOf('=');
-        if (eq === -1) continue;
-        const key = pair.slice(0, eq);
-        const value = pair.slice(eq + 1);
-        try {
-            args[key] = decodeURIComponent(value);
-        } catch (e) {
-            args[key] = value;
-        }
-    }
-    return args;
-}
-
-// 過濾模組預設值（TOTP:null 會以字串 "null" 傳入）
-function normalizeTotpSecret(value) {
-    const trimmed = (value || '').trim();
-    return trimmed && trimmed !== 'null' && trimmed !== 'undefined' ? trimmed : '';
-}
-
-function parseJson(text) {
-    try {
-        return JSON.parse(text || '{}');
-    } catch (e) {
-        return {};
-    }
-}
+const TOKEN_KEY = '1min_jwt';
+const TEAM_KEY = '1min_team_id';
+const RENEW_BEFORE_MS = 2 * 24 * 60 * 60 * 1000;
+const POLL_INTERVAL_MS = 5000;
+const POLL_ATTEMPTS = 6;
+const TITLE = '1min.ai 簽到';
+const LOGIN_HINT = '請用經過 Surge 的瀏覽器登入 app.1min.ai 以重新取得 token';
 
 function base64UrlDecode(input) {
-    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-    const normalized = input.replace(/-/g, '+').replace(/_/g, '/');
-    let out = '';
-    let buffer = 0;
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
     let bits = 0;
-    for (const char of normalized) {
+    let value = 0;
+    let out = '';
+    for (const char of input) {
         const index = alphabet.indexOf(char);
-        if (index === -1) continue;
-        buffer = (buffer << 6) | index;
+        if (index < 0) continue;
+        value = ((value << 6) | index) & 0xffffff;
         bits += 6;
         if (bits >= 8) {
             bits -= 8;
-            out += String.fromCharCode((buffer >>> bits) & 0xff);
+            out += String.fromCharCode((value >> bits) & 0xff);
         }
     }
     return out;
 }
 
-// 解析 JWT 過期時間（毫秒），解析失敗回傳 0 視為已過期
-function decodeJwtExpiry(token) {
+// 僅解析 payload，不驗證簽章（token 由 1min.ai 伺服器核發，簽章驗證無額外意義）
+function jwtPayload(token) {
     try {
-        const payload = parseJson(base64UrlDecode(token.split('.')[1]));
-        return typeof payload.exp === 'number' ? payload.exp * 1000 : 0;
+        const payload = JSON.parse(base64UrlDecode(token.split('.')[1] || ''));
+        return typeof payload.exp === 'number' && typeof payload.iat === 'number' ? payload : null;
     } catch (e) {
-        return 0;
+        return null;
     }
 }
 
-function generateDeviceId() {
-    const randomHex = (length) =>
-        Array.from({ length }, () => '0123456789abcdef'[Math.floor(Math.random() * 16)]).join('');
-    return `$device:${randomHex(16)}-${randomHex(15)}-${randomHex(8)}-${randomHex(6)}-${randomHex(16)}`;
+// ===== http-request：擷取 token 與 team ID =====
+function capture() {
+    const headers = $request.headers || {};
+    const authKey = Object.keys(headers).find((k) => k.toLowerCase() === 'x-auth-token');
+    const token = authKey ? String(headers[authKey]).replace(/^Bearer\s*/i, '').trim() : '';
+    const payload = token && jwtPayload(token);
+
+    const team = $request.url.match(/\/teams\/([0-9a-f-]{36})\//i);
+    if (team && $persistentStore.read(TEAM_KEY) !== team[1]) {
+        $persistentStore.write(team[1], TEAM_KEY);
+        console.log(`已記錄 team ID: ${team[1]}`);
+        $notification.post(TITLE, '已取得 team ID', team[1]);
+    }
+
+    if (payload) {
+        const stored = $persistentStore.read(TOKEN_KEY);
+        const storedPayload = stored && jwtPayload(stored);
+        // 換發後瀏覽器仍會送出舊 token，只接受比現有更新的
+        if (!storedPayload || payload.iat > storedPayload.iat) {
+            $persistentStore.write(token, TOKEN_KEY);
+            const until = new Date(payload.exp * 1000).toLocaleString('zh-TW');
+            console.log(`已更新 token，有效至 ${until}`);
+            $notification.post(TITLE, '已取得登入 token', `有效至 ${until}`);
+        }
+    }
+    $done({});
 }
 
-function formatNumber(num) {
-    return String(num).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-}
-
+// ===== cron：簽到 =====
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// 隨機延遲 0 ~ maxMinutes 分鐘，讓每日執行時間有誤差
-async function randomDelay(maxMinutes) {
-    const minutes = Number(maxMinutes);
-    if (!(minutes > 0)) return;
-    const ms = Math.floor(Math.random() * minutes * 60000);
-    console.log(`⏳ 隨機延遲 ${Math.round(ms / 1000)} 秒後開始`);
-    await sleep(ms);
-}
-
-// ===== HTTP 標頭 =====
-const BROWSER_HEADERS = {
-    'Content-Type': 'application/json',
-    Accept: 'application/json, text/plain, */*',
-    Origin: 'https://app.1min.ai',
-    Referer: 'https://app.1min.ai/',
-    'User-Agent':
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
-};
-
-const authHeaders = (token) => ({ ...BROWSER_HEADERS, 'X-Auth-Token': `Bearer ${token}` });
-const loginHeaders = (deviceId) => ({
-    ...BROWSER_HEADERS,
-    'X-Auth-Token': 'Bearer',
-    'Mp-Identity': deviceId,
-});
-
-// ===== JWT 快取 =====
-function createSessionStore(email) {
-    const tokenKey = `1min_jwt_${email}`;
-    const userKey = `1min_user_${email}`;
-    return {
-        load() {
+function api(method, path, token, body) {
+    return new Promise((resolve, reject) => {
+        const options = {
+            url: `https://api.1min.ai${path}`,
+            timeout: 10,
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Auth-Token': `Bearer ${token}`,
+                'User-Agent':
+                    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
+                Accept: 'application/json, text/plain, */*',
+                Origin: 'https://app.1min.ai',
+                Referer: 'https://app.1min.ai/',
+            },
+        };
+        if (body) options.body = JSON.stringify(body);
+        $httpClient[method](options, (error, response, data) => {
+            if (error) return reject(new Error(`${path} 連線失敗: ${error}`));
+            if (response.status === 401) return reject(new Error(`token 已失效。${LOGIN_HINT}`));
+            let json = {};
             try {
-                const token = $.storeRead(tokenKey);
-                const userJson = $.storeRead(userKey);
-                if (!token || !userJson) return null;
-                return { token, user: JSON.parse(userJson) };
-            } catch (e) {
-                return null;
-            }
-        },
-        save(token, user) {
-            $.storeWrite(token, tokenKey);
-            $.storeWrite(JSON.stringify(user), userKey);
-        },
-        clear() {
-            $.storeRemove(tokenKey);
-            $.storeRemove(userKey);
-        },
-    };
-}
-
-// ===== 1min.ai API =====
-async function apiLogin(email, password, deviceId) {
-    const res = await $.post({
-        url: `${API_BASE}/auth/login`,
-        headers: loginHeaders(deviceId),
-        body: JSON.stringify({ email, password }),
-    });
-    const data = parseJson(res.body);
-    if (res.status !== 200 || !data.user) {
-        if (res.status === 401) throw new Error(data.message || '帳號或密碼錯誤');
-        if (res.status === 429) throw new Error('請求過於頻繁，請稍後再試');
-        throw new Error(data.message || `登入失敗 (HTTP ${res.status})`);
-    }
-    return data;
-}
-
-async function apiVerifyMfa(tempToken, code, deviceId) {
-    const res = await $.post({
-        url: `${API_BASE}/auth/mfa/verify`,
-        headers: loginHeaders(deviceId),
-        body: JSON.stringify({ code, token: tempToken }),
-    });
-    const data = parseJson(res.body);
-    if (res.status !== 200 || !data.user) {
-        throw new Error(data.message || `MFA 驗證失敗 (HTTP ${res.status})`);
-    }
-    return data;
-}
-
-// 401 時擲出帶 unauthorized 標記的錯誤，供呼叫端區分「token 失效」與其他錯誤
-async function apiGetCredits(teamId, token) {
-    const res = await $.get({
-        url: `${API_BASE}/teams/${teamId}/credits`,
-        headers: authHeaders(token),
-    });
-    if (res.status === 401) {
-        const error = new Error('token 已失效');
-        error.unauthorized = true;
-        throw error;
-    }
-    if (res.status !== 200) throw new Error(`查詢點數失敗 (HTTP ${res.status})`);
-    const data = parseJson(res.body);
-    if (typeof data.credit !== 'number') throw new Error('點數回應格式異常');
-    return data.credit;
-}
-
-// 呼叫未讀通知 API 觸發每日簽到獎勵（伺服器端行為），失敗不影響主流程
-async function apiTouchNotifications(token) {
-    try {
-        await $.get({
-            url: `${API_BASE}/notifications/unread`,
-            headers: authHeaders(token),
+                json = JSON.parse(data || '{}');
+            } catch (e) {}
+            resolve({ status: response.status, json });
         });
-    } catch (error) {
-        console.log(`⚠️ 觸發簽到請求失敗: ${error.message}`);
+    });
+}
+
+// 1min.ai 無獨立換發端點，改以「密碼重設為同一組」換發新 token（會讓瀏覽器端登出）
+async function renew(token, password) {
+    const { status, json } = await api('post', '/auth/passwords', token, {
+        current_password: password,
+        new_password: password,
+    });
+    const next = json.user && json.user.token;
+    if (status !== 200 || typeof next !== 'string') {
+        throw new Error(`token 換發失敗: ${json.message || `HTTP ${status}`}`);
     }
+    $persistentStore.write(next, TOKEN_KEY);
+    return next;
 }
 
-// ===== 業務邏輯 =====
-// 優先選擇訂閱擁有者為自己的 team，否則退回第一個
-function findTeam(user) {
-    const teams = (user && user.teams) || [];
-    const owned = teams.find(
-        (t) => t.team && t.team.subscription && t.team.subscription.userId === user.uuid
+// null 代表讀取失敗，與點數為 0 不同
+async function getCredits(teamId, token) {
+    const { status, json } = await api('get', `/teams/${teamId}/credits`, token);
+    return status === 200 && typeof json.credit === 'number' ? json.credit : null;
+}
+
+async function getTopups(teamId, token) {
+    const { status, json } = await api(
+        'get',
+        `/teams/${teamId}/topups?page=1&pageSize=10&orderBy=-createdAt`,
+        token
     );
-    const entry = owned || teams[0];
-    if (!entry) return null;
-    const teamId = entry.teamId || (entry.team && entry.team.uuid);
-    if (!teamId) return null;
-    return {
-        teamId,
-        userName: entry.userName || (user.email ? user.email.split('@')[0] : '用戶'),
-        usedCredit: entry.usedCredit || 0,
-    };
+    return status === 200 && Array.isArray(json.topupList) ? json.topupList : null;
 }
 
-// 取得有效登入狀態：快取 token 優先，失效則帳密登入
-async function getSession(config, store) {
-    const cached = store.load();
-    if (cached) {
-        if (decodeJwtExpiry(cached.token) > Date.now() + JWT_EXPIRY_MARGIN_MS) {
-            const team = findTeam(cached.user);
-            if (team) {
-                try {
-                    await apiGetCredits(team.teamId, cached.token);
-                    console.log('✅ 使用快取 token');
-                    return cached;
-                } catch (error) {
-                    if (error.unauthorized) {
-                        console.log('⚠️ 快取 token 已被伺服器拒絕，改用帳密登入');
-                        store.clear();
-                    } else {
-                        console.log(`⚠️ 驗證快取 token 失敗（${error.message}），改用帳密登入`);
-                    }
-                }
-            }
+async function checkin(password) {
+    let token = $persistentStore.read(TOKEN_KEY);
+    const teamId = $persistentStore.read(TEAM_KEY);
+    const payload = token && jwtPayload(token);
+    if (!payload || !teamId) throw new Error(`尚未取得 token 或 team ID。${LOGIN_HINT}`);
+    if (payload.exp * 1000 <= Date.now()) throw new Error(`token 已過期。${LOGIN_HINT}`);
+
+    let renewed = '';
+    if (payload.exp * 1000 - Date.now() < RENEW_BEFORE_MS) {
+        if (password) {
+            token = await renew(token, password);
+            renewed = `\ntoken 已換發，有效至 ${new Date(jwtPayload(token).exp * 1000).toLocaleString('zh-TW')}`;
         } else {
-            console.log('⚠️ 快取 token 已過期，改用帳密登入');
-            store.clear();
+            renewed = `\ntoken 將於 ${new Date(payload.exp * 1000).toLocaleString('zh-TW')} 到期。${LOGIN_HINT}`;
         }
     }
 
-    console.log('🔑 執行帳密登入');
-    const deviceId = generateDeviceId();
-    let data = await apiLogin(config.email, config.password, deviceId);
+    const startedAt = Date.now();
+    // 呼叫未讀通知 API 會觸發每日獎勵，幾秒後才會出現在點數紀錄
+    const unread = await api('get', '/notifications/unread', token);
+    if (unread.status !== 200) throw new Error(`簽到請求失敗: HTTP ${unread.status}`);
 
-    if (data.user.mfaRequired) {
-        if (!config.totpSecret) {
-            throw new Error('帳號已啟用 MFA，請在模組參數填入 TOTP 金鑰');
-        }
-        console.log('🔐 需要 MFA，以 TOTP 驗證');
-        data = await apiVerifyMfa(data.user.token, TOTP.generate(config.totpSecret), deviceId);
+    let readOnce = false;
+    let latest = null;
+    let reward = null;
+    for (let i = 0; i < POLL_ATTEMPTS && reward === null; i++) {
+        await sleep(POLL_INTERVAL_MS);
+        const topups = await getTopups(teamId, token);
+        if (!topups) continue;
+        readOnce = true;
+        latest = topups.find((t) => t.type === 'DAILY_FREE_CREDIT') || null;
+        if (latest && Date.parse(latest.createdAt) >= startedAt) reward = latest.credit;
     }
 
-    const token = data.token || (data.user && data.user.token);
-    if (!token) throw new Error('登入回應中找不到 token');
-    store.save(token, data.user);
-    return { token, user: data.user };
+    const credit = await getCredits(teamId, token);
+    const lines = [];
+    if (credit !== null) lines.push(`點數: ${credit.toLocaleString('zh-TW')}`);
+    if (reward !== null) {
+        lines.push(`獎勵: +${reward.toLocaleString('zh-TW')}`);
+    } else if (readOnce) {
+        const at = latest ? new Date(latest.createdAt).toLocaleString('zh-TW') : '今天稍早';
+        lines.push(`獎勵: 今日已領取（${at}）`);
+    } else {
+        lines.push('獎勵: 無法讀取點數紀錄');
+    }
+    return lines.join('\n') + renewed;
 }
 
-// 觸發簽到、計算獎勵並發送通知
-async function checkIn(session) {
-    const team = findTeam(session.user);
-    if (!team) {
-        console.log('⚠️ 無法取得團隊資訊');
-        $.notify('登入成功', '無法取得團隊資訊，略過簽到');
-        return;
-    }
-
-    const before = await apiGetCredits(team.teamId, session.token);
-    await apiTouchNotifications(session.token);
-    await sleep(BONUS_WAIT_MS);
-
-    let after = before;
-    try {
-        after = await apiGetCredits(team.teamId, session.token);
-    } catch (error) {
-        console.log(`⚠️ 查詢最終點數失敗（${error.message}），以簽到前點數顯示`);
-    }
-
-    const bonus = after - before;
-    const total = after + team.usedCredit;
-    const percent = total > 0 ? ((after / total) * 100).toFixed(1) : '0.0';
-
-    let message = `${team.userName}｜點數 ${formatNumber(after)} (${percent}%)`;
-    if (bonus > 0) message += ` +${formatNumber(bonus)}`;
-
-    console.log(`✅ ${message}`);
-    $.notify('簽到完成', message);
+if (typeof $request !== 'undefined') {
+    capture();
+} else {
+    const raw = new URLSearchParams($argument || '').get('password');
+    // 未填時模組會帶入預設值 null
+    const password = raw && raw !== 'null' ? raw : null;
+    checkin(password)
+        .then((message) => {
+            console.log(message);
+            $notification.post(TITLE, '簽到成功', message);
+        })
+        .catch((error) => {
+            console.log(`❌ ${error.message}`);
+            $notification.post(TITLE, '簽到失敗', error.message);
+        })
+        .finally(() => $done());
 }
-
-// ===== 主流程 =====
-(async () => {
-    console.log('🎬 1min.ai 自動簽到');
-
-    const args = parseArguments($.argument);
-    const email = (args.email || '').trim();
-    const password = args.password || '';
-    if (!email || !password) {
-        throw new Error('缺少 email 或 password 參數，請檢查模組設定');
-    }
-
-    await randomDelay(args.jitter);
-
-    const store = createSessionStore(email);
-    const session = await getSession(
-        { email, password, totpSecret: normalizeTotpSecret(args.totp) },
-        store
-    );
-    await checkIn(session);
-})()
-    .catch((error) => {
-        console.log(`❌ ${error.message}`);
-        $.notify('執行失敗', error.message);
-    })
-    .finally(() => $.done());

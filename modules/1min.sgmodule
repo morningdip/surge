@@ -1,8 +1,12 @@
 #!name=1min.ai 自動簽到
-#!desc=每日自動登入 1min.ai 並領取簽到獎勵
+#!desc=每日自動登入 1min.ai 並領取簽到獎勵。登入需要驗證碼，請先用經過 Surge 的瀏覽器登入 app.1min.ai，模組會自動擷取 token；token 效期 7 天：有填密碼會在到期前 2 天自動換發（換發時瀏覽器端會被登出）；沒填密碼則需於到期前重新用瀏覽器登入一次
 #!category=簽到
-#!arguments=帳號,密碼,TOTP:null
-#!arguments-desc=帳號: 1min.ai 登入 email\n密碼: 登入密碼\nTOTP: MFA 金鑰（未啟用 MFA 請保持 null）
+#!arguments=Cron:10 16 * * *,密碼:null
+#!arguments-desc=Cron: 簽到執行時間，預設每天下午 4 點 10 分，可自行調整為其他時間\n密碼: 選填，用於自動換發 token（以重設為同一組密碼達成，不會變更實際密碼；換發時瀏覽器端的登入會被登出），不使用請保持 null
 
 [Script]
-1min-daily-login = type=cron,cronexp=30 16 * * *,wake-system=1,timeout=60,script-path=https://raw.githubusercontent.com/morningdip/surge/refs/heads/main/scripts/1min.js,argument=email={{{帳號}}}&password={{{密碼}}}&totp={{{TOTP}}}
+1min-daily-login = type=cron,cronexp={{{Cron}}},wake-system=1,timeout=60,script-path=https://raw.githubusercontent.com/morningdip/surge/refs/heads/main/scripts/1min.js,argument=password={{{密碼}}}
+1min-token-capture = type=http-request,pattern=^https:\/\/api\.1min\.ai\/,requires-body=0,script-path=https://raw.githubusercontent.com/morningdip/surge/refs/heads/main/scripts/1min.js
+
+[MITM]
+hostname = %APPEND% api.1min.ai
